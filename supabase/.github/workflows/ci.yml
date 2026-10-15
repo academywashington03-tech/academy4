@@ -1,0 +1,78 @@
+# Continuous integration. Uses NO secrets and NO external accounts for the main job.
+# Runs on every push and pull request: install -> typecheck -> lint (advisory) -> unit/static tests -> build.
+# NOTE: this workflow was written offline and has NOT been run on GitHub yet; check the first run in the Actions tab.
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node (version from .nvmrc)
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            package.json
+
+      # npm ci needs package-lock.json (created by the first `npm install`; commit it to make installs reproducible).
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            echo "::warning::package-lock.json not found - using npm install. Commit the lockfile for reproducible installs."
+            npm install
+          fi
+
+      - name: TypeScript check
+        run: npm run typecheck
+
+      # Lint has never been executed yet, so it is advisory (continue-on-error). After the first clean run, delete that line.
+      - name: ESLint
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Unit and static security tests
+        run: npm test
+
+      # The build runs with NO Supabase/Paymob/email variables on purpose: the app must build and degrade safely without them.
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+
+  # Database checks. MANUAL only (Actions tab -> CI -> Run workflow) and only if you add the repository secret TEST_DATABASE_URL
+  # pointing at a SEPARATE TEST Supabase project. It applies the migrations and runs supabase/tests/*.sql (each test rolls back).
+  # Never point this at production.
+  sql-checks:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Apply migrations and run SQL checks (TEST database only)
+        env:
+          DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then echo "::error::Add the TEST_DATABASE_URL secret (a TEST database, never production)"; exit 1; fi
+          bash scripts/run-sql-checks.sh --migrate

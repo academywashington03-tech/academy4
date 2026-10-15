@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: light; }
+html { scroll-behavior: smooth; }
+body { @apply bg-ivory-100 text-ink font-sans antialiased; }
+h1, h2, h3 { @apply font-display; }
+/* Arabic needs more line-height than Latin */
+html[lang="ar"] body { line-height: 1.85; }
+html[lang="ar"] h1, html[lang="ar"] h2 { line-height: 1.5; }
+:focus-visible { outline: 3px solid theme(colors.gold.500); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+
+@layer components {
+  .btn { @apply inline-flex items-center justify-center rounded-md px-5 py-2.5 text-sm font-semibold transition-colors min-h-[44px]; }
+  .btn-gold { @apply bg-gold-500 text-navy-950 hover:bg-gold-400; }
+  .btn-navy { @apply bg-navy-900 text-ivory-50 hover:bg-navy-700; }
+  .btn-ghost-light { @apply border border-gold-500/60 text-gold-300 hover:bg-gold-500/10; }
+  .container-x { @apply mx-auto w-full max-w-6xl px-4 sm:px-6; }
+}
